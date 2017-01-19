@@ -22,54 +22,54 @@ set(config_module_list
 	#
 	drivers/device
 	modules/sensors
-	platforms/posix/drivers/df_ms5607_wrapper
-	platforms/posix/drivers/df_mpu6050_wrapper
+	platforms/posix/drivers/bebop_flow
 	platforms/posix/drivers/df_ak8963_wrapper
 	platforms/posix/drivers/df_bebop_bus_wrapper
 	platforms/posix/drivers/df_bebop_rangefinder_wrapper
-	platforms/posix/drivers/bebop_flow
+	platforms/posix/drivers/df_mpu6050_wrapper
+	platforms/posix/drivers/df_ms5607_wrapper
 
 	#
 	# System commands
 	#
-	systemcmds/param
-	systemcmds/mixer
-	systemcmds/ver
 	systemcmds/esc_calib
-	systemcmds/topic_listener
+	systemcmds/mixer
+	systemcmds/param
 	systemcmds/perf
+	systemcmds/topic_listener
+	systemcmds/ver
 
 	#
 	# Estimation modules
 	#
 	modules/attitude_estimator_q
-	modules/position_estimator_inav
-	modules/local_position_estimator
 	modules/ekf2
+	modules/local_position_estimator
+	modules/position_estimator_inav
 
 	#
 	# Vehicle Control
 	#
-	modules/mc_att_control
-	modules/mc_pos_control
 	modules/fw_att_control
 	modules/fw_pos_control_l1
+	modules/mc_att_control
+	modules/mc_pos_control
 	modules/vtol_att_control
 
 	#
 	# Library modules
 	#
-	modules/sdlog2
-	modules/logger
 	modules/commander
+	modules/dataman
+	modules/land_detector
+	modules/logger
+	modules/mavlink
+	modules/navigator
 	modules/param
+	modules/sdlog2
 	modules/systemlib
 	modules/systemlib/mixer
 	modules/uORB
-	modules/dataman
-	modules/land_detector
-	modules/navigator
-	modules/mavlink
 
 	#
 	# PX4 drivers
@@ -80,19 +80,20 @@ set(config_module_list
 	# Libraries
 	#
 	lib/controllib
-	lib/mathlib
-	lib/mathlib/math/filter
-	lib/geo
+	lib/conversion
+	lib/DriverFramework/framework
 	lib/ecl
+	lib/external_lgpl
+	lib/geo
 	lib/geo_lookup
 	lib/launchdetection
-	lib/external_lgpl
-	lib/conversion
-	lib/terrain_estimation
+	lib/mathlib
+	lib/mathlib/math/filter
+	lib/OpticalFlow
 	lib/runway_takeoff
 	lib/tailsitter_recovery
+	lib/terrain_estimation
 	lib/version
-	lib/DriverFramework/framework
 
 	#
 	# POSIX
@@ -103,10 +104,10 @@ set(config_module_list
 )
 
 set(config_df_driver_list
-	ms5607
-	mpu6050
 	ak8963
 	bebop_bus
 	bebop_rangefinder
+	mpu6050
+	ms5607
 	mt9v117
 )

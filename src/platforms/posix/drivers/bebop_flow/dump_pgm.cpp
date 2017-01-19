@@ -39,8 +39,8 @@
 
 #include <px4_posix.h>
 
-#define HRES_STR "320"
-#define VRES_STR "240"
+#define HRES_STR "64"
+#define VRES_STR "64"
 
 char pgm_header[] = "P5\n#99999999999999 usec \n" HRES_STR " " VRES_STR "\n255\n";
 char pgm_dumpname[] = "image";

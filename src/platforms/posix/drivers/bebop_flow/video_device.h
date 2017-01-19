@@ -38,6 +38,8 @@
 
 #define VIDEO_DEVICE_IMAGE_WIDTH 320
 #define VIDEO_DEVICE_IMAGE_HEIGHT 240
+#define VIDEO_DEVICE_CROP_WIDTH 64
+#define VIDEO_DEVICE_CROP_HEIGHT 64
 
 struct frame_data {
 	uint32_t timestamp;
