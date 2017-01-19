@@ -191,7 +191,11 @@ int VideoDevice::init_crop()
 	}
 
 	crop.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	crop.c = cropcap.defrect; // reset to default
+	// crop.c = cropcap.defrect; // reset to default
+	crop.c.top = cropcap.bounds.height / 2.0 + VIDEO_DEVICE_CROP_HEIGHT / 2.0; //152;
+	crop.c.left = cropcap.bounds.width / 2.0 + VIDEO_DEVICE_CROP_WIDTH / 2.0; //192;
+	crop.c.width = VIDEO_DEVICE_CROP_WIDTH;
+	crop.c.height = VIDEO_DEVICE_CROP_HEIGHT;
 	ret = ioctl(_fd, VIDIOC_S_CROP, &crop);
 
 	if (ret < 0) {
@@ -209,8 +213,8 @@ int VideoDevice::init_format()
 	memset(&fmt, 0, sizeof(fmt));
 
 	fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	fmt.fmt.pix.width = VIDEO_DEVICE_IMAGE_WIDTH;
-	fmt.fmt.pix.height = VIDEO_DEVICE_IMAGE_HEIGHT;
+	fmt.fmt.pix.width = VIDEO_DEVICE_CROP_WIDTH;
+	fmt.fmt.pix.height = VIDEO_DEVICE_CROP_HEIGHT;
 	fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_NV12;
 	fmt.fmt.pix.colorspace = V4L2_COLORSPACE_REC709;
 

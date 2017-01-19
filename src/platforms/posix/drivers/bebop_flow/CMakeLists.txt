@@ -38,11 +38,12 @@ px4_add_module(
 	MAIN bebop_flow
 	SRCS
 		bebop_flow.cpp
-		video_device.cpp
 		dump_pgm.cpp
+		video_device.cpp
 	DEPENDS
-		platforms__common
 		df_driver_framework
 		df_mt9v117
+		lib__OpticalFlow
+		platforms__common
 	)
 # vim: set noet ft=cmake fenc=utf-8 ff=unix :

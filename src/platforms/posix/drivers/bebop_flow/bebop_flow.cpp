@@ -47,6 +47,20 @@
 #include "video_device.h"
 #include "dump_pgm.h"
 #include <mt9v117/MT9V117.hpp>
+#include <drivers/drv_hrt.h>
+#include "OpticalFlow/include/flow_px4.hpp"
+
+#include <uORB/uORB.h>
+#include <uORB/topics/subsystem_info.h>
+#include <uORB/topics/optical_flow.h>
+#include <uORB/topics/vehicle_attitude.h>
+
+#include <conversion/rotation.h>
+
+#define FLOW_OUTPUT_RATE 20
+#define FOCAL_LENGTH_X 412.3540 //from 320x240 resolution
+#define FOCAL_LENGTH_Y 306.5525 //from 320x240 resolution
+#define FLOW_SEARCH_SIZE 8
 
 extern "C" { __EXPORT int bebop_flow_main(int argc, char *argv[]); }
 
@@ -54,6 +68,18 @@ using namespace DriverFramework;
 
 namespace bebop_flow
 {
+orb_advert_t _flow_topic;
+int _orb_class_instance;
+struct gyro {
+	float pitchrate;
+	float rollrate;
+	float yawrate;
+};
+struct flow_ang {
+	float x;
+	float y;
+};
+
 MT9V117 *image_sensor = nullptr;				 // I2C image sensor
 VideoDevice *g_dev = nullptr;            // interface to the video device
 volatile bool _task_should_exit = false; // flag indicating if bebop flow task should exit
@@ -69,6 +95,7 @@ int info();
 int trigger(int count);
 int clear_errors();
 void usage();
+int publish_flow(int quality, struct flow_ang angular_flow, int dt, struct gyro gyro_integral);
 void task_main(int argc, char *argv[]);
 
 void task_main(int argc, char *argv[])
@@ -78,6 +105,21 @@ void task_main(int argc, char *argv[])
 	struct frame_data frame;
 	memset(&frame, 0, sizeof(frame));
 	uint32_t timeout_cnt = 0;
+
+	//subscribe to sensor_combined for gyro measurements
+	struct vehicle_attitude_s sensor;
+	memset(&sensor, 0, sizeof(sensor));
+	int vehicle_attitude_sub = orb_subscribe(ORB_ID(vehicle_attitude));
+
+	struct gyro gyro_int = {0.0f, 0.0f, 0.0f};
+	struct flow_ang angular_flow = {0.0f, 0.0f};
+
+	_flow_topic = nullptr;
+	_orb_class_instance = -1;
+
+	//initialize flow
+	OpticalFlowPX4 *_optical_flow = new OpticalFlowPX4(FOCAL_LENGTH_X, FOCAL_LENGTH_Y, FLOW_OUTPUT_RATE,
+			VIDEO_DEVICE_CROP_WIDTH, VIDEO_DEVICE_CROP_HEIGHT, FLOW_SEARCH_SIZE);
 
 	// Main loop
 	while (!_task_should_exit) {
@@ -112,10 +154,36 @@ void task_main(int argc, char *argv[])
 		}
 
 		/***************************************************************
-		 *
-		 * Optical Flow computation
-		 *
-		 **************************************************************/
+		*
+		* Optical Flow computation
+		*
+		**************************************************************/
+		static uint32_t lasttimestamp;
+		uint32_t deltatime = (frame.timestamp - lasttimestamp);
+
+		// get gyro measurements from vehicle_attitude to fill opticalFlow_msgs
+		static bool updated;
+		orb_check(vehicle_attitude_sub, &updated);
+
+		if (updated) {
+			orb_copy(ORB_ID(vehicle_attitude), vehicle_attitude_sub, &sensor);
+			//integrate gyro at same rate
+			gyro_int.pitchrate += sensor.rollspeed * deltatime / 1000000.0f;
+			gyro_int.rollrate += sensor.pitchspeed * deltatime / 1000000.0f;
+			gyro_int.yawrate += sensor.yawspeed * deltatime / 1000000.0f;
+		}
+
+		lasttimestamp = frame.timestamp;
+
+		int dt_us = 0;
+		//calculate angular flow
+		int quality = _optical_flow->calcFlow((uint8_t *)frame.data, frame.timestamp, dt_us, angular_flow.x, angular_flow.y);
+
+		//calcFlow() will return -1 if it is still accumulating flow -> ouput rate
+		if (quality >= 0) {
+			publish_flow(quality, angular_flow, dt_us, gyro_int);
+			gyro_int = {0.0f, 0.0f, 0.0f};
+		}
 
 		ret = g_dev->put_frame(frame);
 
@@ -260,10 +328,48 @@ int trigger(int count)
 	return OK;
 }
 
-void
-usage()
+void usage()
 {
 	PX4_INFO("Usage: bebop_flow 'start', 'info', 'stop', 'trigger [-n #]'");
+}
+
+int publish_flow(int quality, struct flow_ang ang_flow, int dt, struct gyro gyro_integral)
+{
+	struct optical_flow_s flow;
+	memset(&flow, 0, sizeof(flow));
+
+	flow.sensor_id = 2.0;
+	flow.timestamp = hrt_absolute_time();
+	flow.time_since_last_sonar_update = 0;
+	flow.frame_count_since_last_readout = 0; // ?
+	flow.integration_timespan = dt;
+
+	flow.ground_distance_m = 0;
+	flow.gyro_temperature = 0;
+	flow.gyro_x_rate_integral = gyro_integral.pitchrate;
+	flow.gyro_y_rate_integral = gyro_integral.rollrate;
+	flow.gyro_z_rate_integral = gyro_integral.yawrate;
+	flow.pixel_flow_x_integral = ang_flow.x;
+	flow.pixel_flow_y_integral = ang_flow.y;
+	flow.quality = quality;
+
+	/* rotate measurements according to parameter */
+	enum Rotation flow_rot;
+	param_get(param_find("SENS_FLOW_ROT"), &flow_rot);
+
+	float zeroval = 0.0f;
+	rotate_3f(flow_rot, flow.pixel_flow_x_integral, flow.pixel_flow_y_integral, zeroval);
+	rotate_3f(flow_rot, flow.gyro_x_rate_integral, flow.gyro_y_rate_integral, flow.gyro_z_rate_integral);
+
+	if (_flow_topic == nullptr) {
+		_flow_topic = orb_advertise_multi(ORB_ID(optical_flow), &flow,
+						  &_orb_class_instance, ORB_PRIO_DEFAULT);
+
+	} else {
+		orb_publish(ORB_ID(optical_flow), _flow_topic, &flow);
+	}
+
+	return OK;
 }
 
 } /* bebop flow namespace*/
