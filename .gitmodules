@@ -41,3 +41,6 @@
 [submodule "src/drivers/gps/devices"]
 	path = src/drivers/gps/devices
 	url = https://github.com/PX4/GpsDrivers.git
+[submodule "src/lib/OpticalFlow"]
+	path = src/lib/OpticalFlow
+	url = https://github.com/PX4/OpticalFlow.git
