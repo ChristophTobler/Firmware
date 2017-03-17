@@ -57,6 +57,7 @@
 #include <drivers/drv_accel.h>
 #include <drivers/drv_gyro.h>
 #include <drivers/device/integrator.h>
+#include <mathlib/math/filter/LowPassFilter2p.hpp>
 
 #include <lib/conversion/rotation.h>
 
@@ -68,6 +69,10 @@
 // We don't want to auto publish, therefore set this to 0.
 #define MPU6050_NEVER_AUTOPUBLISH_US 0
 
+#define MPU6050_GYRO_DEFAULT_RATE									250
+#define MPU6050_ACCEL_DEFAULT_RATE								250
+#define MPU6050_GYRO_DEFAULT_DRIVER_FILTER_FREQ		30
+#define MPU6050_ACCEL_DEFAULT_DRIVER_FILTER_FREQ	30
 
 extern "C" { __EXPORT int df_mpu6050_wrapper_main(int argc, char *argv[]); }
 
@@ -139,6 +144,13 @@ private:
 	Integrator		    _accel_int;
 	Integrator		    _gyro_int;
 
+	math::LowPassFilter2p	_accel_filter_x;
+	math::LowPassFilter2p	_accel_filter_y;
+	math::LowPassFilter2p	_accel_filter_z;
+	math::LowPassFilter2p	_gyro_filter_x;
+	math::LowPassFilter2p	_gyro_filter_y;
+	math::LowPassFilter2p	_gyro_filter_z;
+
 	unsigned		    _publish_count;
 
 	perf_counter_t		    _read_counter;
@@ -151,6 +163,7 @@ private:
 
 	hrt_abstime		    _last_accel_range_hit_time;
 	uint64_t		    _last_accel_range_hit_count;
+	uint64_t time_last;
 
 };
 
@@ -166,6 +179,12 @@ DfMPU6050Wrapper::DfMPU6050Wrapper(enum Rotation rotation) :
 	_gyro_orb_class_instance(-1),
 	_accel_int(MPU6050_NEVER_AUTOPUBLISH_US, false),
 	_gyro_int(MPU6050_NEVER_AUTOPUBLISH_US, true),
+	_accel_filter_x(MPU6050_ACCEL_DEFAULT_RATE, MPU6050_ACCEL_DEFAULT_DRIVER_FILTER_FREQ),
+	_accel_filter_y(MPU6050_ACCEL_DEFAULT_RATE, MPU6050_ACCEL_DEFAULT_DRIVER_FILTER_FREQ),
+	_accel_filter_z(MPU6050_ACCEL_DEFAULT_RATE, MPU6050_ACCEL_DEFAULT_DRIVER_FILTER_FREQ),
+	_gyro_filter_x(MPU6050_GYRO_DEFAULT_RATE, MPU6050_GYRO_DEFAULT_DRIVER_FILTER_FREQ),
+	_gyro_filter_y(MPU6050_GYRO_DEFAULT_RATE, MPU6050_GYRO_DEFAULT_DRIVER_FILTER_FREQ),
+	_gyro_filter_z(MPU6050_GYRO_DEFAULT_RATE, MPU6050_GYRO_DEFAULT_DRIVER_FILTER_FREQ),
 	_publish_count(0),
 	_read_counter(perf_alloc(PC_COUNT, "mpu6050_reads")),
 	_error_counter(perf_alloc(PC_COUNT, "mpu6050_errors")),
@@ -430,9 +449,15 @@ int DfMPU6050Wrapper::_publish(struct imu_sensor_data &data)
 	}
 
 	uint64_t now = hrt_absolute_time();
+	// double hz_ = 1000000.0 / (now-time_last);
+	// PX4_INFO("rate = %f", hz_);
+	// time_last = now;
+	math::Vector<3> aval_integrated;
+	math::Vector<3> gval_integrated;
+	// uint64_t integral_dt_unused;
 
-	math::Vector<3> vec_integrated_unused;
-	uint64_t integral_dt_unused;
+	static accel_report accel_report = {};
+	static gyro_report gyro_report = {};
 
 	math::Vector<3> accel_val(data.accel_m_s2_x, data.accel_m_s2_y, data.accel_m_s2_z);
 
@@ -443,11 +468,6 @@ int DfMPU6050Wrapper::_publish(struct imu_sensor_data &data)
 	accel_val(1) = (accel_val(1) - _accel_calibration.y_offset) * _accel_calibration.y_scale;
 	accel_val(2) = (accel_val(2) - _accel_calibration.z_offset) * _accel_calibration.z_scale;
 
-	_accel_int.put(now,
-		       accel_val,
-		       vec_integrated_unused,
-		       integral_dt_unused);
-
 	math::Vector<3> gyro_val(data.gyro_rad_s_x, data.gyro_rad_s_y, data.gyro_rad_s_z);
 
 	// apply sensor rotation on the gyro measurement
@@ -456,11 +476,6 @@ int DfMPU6050Wrapper::_publish(struct imu_sensor_data &data)
 	gyro_val(0) = (gyro_val(0) - _gyro_calibration.x_offset) * _gyro_calibration.x_scale;
 	gyro_val(1) = (gyro_val(1) - _gyro_calibration.y_offset) * _gyro_calibration.y_scale;
 	gyro_val(2) = (gyro_val(2) - _gyro_calibration.z_offset) * _gyro_calibration.z_scale;
-
-	_gyro_int.put(now,
-		      gyro_val,
-		      vec_integrated_unused,
-		      integral_dt_unused);
 
 	// If we are not receiving the last sample from the FIFO buffer yet, let's stop here
 	// and wait for more packets.
@@ -472,9 +487,10 @@ int DfMPU6050Wrapper::_publish(struct imu_sensor_data &data)
 	// Therefore, only publish every forth time.
 	++_publish_count;
 
-	if (_publish_count < 4) {
-		return 0;
-	}
+	// 1kHz is currently not possible... driver runs at 250Hz
+	// if (_publish_count < 4) {
+	// 	return 0;
+	// }
 
 	_publish_count = 0;
 
@@ -488,52 +504,49 @@ int DfMPU6050Wrapper::_publish(struct imu_sensor_data &data)
 
 	perf_begin(_publish_perf);
 
-	accel_report accel_report = {};
-	gyro_report gyro_report = {};
-
 	accel_report.timestamp = gyro_report.timestamp = hrt_absolute_time();
 
-	// TODO: get these right
-	gyro_report.scaling = -1.0f;
-	gyro_report.range_rad_s = -1.0f;
+	gyro_report.scaling = GYRO_RAW_TO_RAD_S;
+	gyro_report.range_rad_s = (2000.0f / 180.0f) * M_PI_F;
 	gyro_report.device_id = m_id.dev_id;
 
-	accel_report.scaling = -1.0f;
-	accel_report.range_m_s2 = -1.0f;
+	accel_report.scaling = MPU6050_ONE_G / 2048.0f;
+	accel_report.range_m_s2 = MPU6050_ONE_G * 16;
 	accel_report.device_id = m_id.dev_id;
 
-	// TODO: remove these (or get the values)
-	gyro_report.x_raw = 0;
-	gyro_report.y_raw = 0;
-	gyro_report.z_raw = 0;
+	gyro_report.x_raw = gyro_val(0);
+	gyro_report.y_raw = gyro_val(1);
+	gyro_report.z_raw = gyro_val(2);
 
-	accel_report.x_raw = 0;
-	accel_report.y_raw = 0;
-	accel_report.z_raw = 0;
+	accel_report.x_raw = accel_val(0);
+	accel_report.y_raw = accel_val(1);
+	accel_report.z_raw = accel_val(2);
 
-	math::Vector<3> gyro_val_filt;
-	math::Vector<3> accel_val_filt;
+	gyro_report.x = _gyro_filter_x.apply(gyro_val(0));
+	gyro_report.y = _gyro_filter_y.apply(gyro_val(1));
+	gyro_report.z = _gyro_filter_z.apply(gyro_val(2));
 
-	// Read and reset.
-	math::Vector<3> gyro_val_integ = _gyro_int.get_and_filtered(true, gyro_report.integral_dt, gyro_val_filt);
-	math::Vector<3> accel_val_integ = _accel_int.get_and_filtered(true, accel_report.integral_dt, accel_val_filt);
+	accel_report.x = _accel_filter_x.apply(accel_val(0));
+	accel_report.y = _accel_filter_y.apply(accel_val(1));
+	accel_report.z = _accel_filter_z.apply(accel_val(2));
 
-	// Use the filtered (by integration) values to get smoother / less noisy data.
-	gyro_report.x = gyro_val_filt(0);
-	gyro_report.y = gyro_val_filt(1);
-	gyro_report.z = gyro_val_filt(2);
+	_gyro_int.put(now,
+		      gyro_val,
+		      gval_integrated,
+		      gyro_report.integral_dt);
 
-	accel_report.x = accel_val_filt(0);
-	accel_report.y = accel_val_filt(1);
-	accel_report.z = accel_val_filt(2);
+	_accel_int.put(now,
+		       accel_val,
+		       aval_integrated,
+		       accel_report.integral_dt);
 
-	gyro_report.x_integral = gyro_val_integ(0);
-	gyro_report.y_integral = gyro_val_integ(1);
-	gyro_report.z_integral = gyro_val_integ(2);
+	gyro_report.x_integral = gval_integrated(0);
+	gyro_report.y_integral = gval_integrated(1);
+	gyro_report.z_integral = gval_integrated(2);
 
-	accel_report.x_integral = accel_val_integ(0);
-	accel_report.y_integral = accel_val_integ(1);
-	accel_report.z_integral = accel_val_integ(2);
+	accel_report.x_integral = aval_integrated(0);
+	accel_report.y_integral = aval_integrated(1);
+	accel_report.z_integral = aval_integrated(2);
 
 	// TODO: when is this ever blocked?
 	if (!(m_pub_blocked)) {
