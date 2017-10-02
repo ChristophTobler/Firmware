@@ -562,6 +562,9 @@ gpssim_main(int argc, char *argv[])
 	const char *device_name = GPS_DEFAULT_UART_PORT;
 	bool fake_gps = false;
 	bool enable_sat_info = false;
+	int fix_type = 3;
+	int num_sat = 10;
+	float noise_multiplier = 0.0f;
 
 	// check for optional arguments
 	int ch;
@@ -583,6 +586,21 @@ gpssim_main(int argc, char *argv[])
 		case 's':
 			enable_sat_info = true;
 			PX4_INFO("Satellite info enabled");
+			break;
+
+		case 't':
+			fix_type = atoi(myoptarg);
+			PX4_INFO("Setting fix_type to %d", fix_type);
+			break;
+
+		case 'n':
+			num_sat = atoi(myoptarg);
+			PX4_INFO("Setting number of satellites to %d", num_sat);
+			break;
+
+		case 'm':
+			noise_multiplier = (float)atoi(myoptarg);
+			PX4_INFO("Setting noise multiplier to %f", (double)noise_multiplier);
 			break;
 
 		default:
@@ -637,6 +655,14 @@ gpssim_main(int argc, char *argv[])
 	 */
 	if (!strcmp(argv[myoptind], "status")) {
 		gpssim::info();
+	}
+
+	/*
+	 * Set parameters
+	 */
+	if (!strcmp(argv[myoptind], "set")) {
+		PX4_WARN("set");
+		// gpssim::set(fix_type, num_sat, noise_multiplier);
 	}
 
 	return 0;
