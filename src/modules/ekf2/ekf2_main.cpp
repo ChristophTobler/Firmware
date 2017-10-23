@@ -69,6 +69,7 @@
 #include <uORB/topics/vehicle_local_position.h>
 #include <uORB/topics/vehicle_status.h>
 #include <uORB/topics/wind_estimate.h>
+#include <uORB/topics/manual_control_setpoint.h>
 
 using control::BlockParamFloat;
 using control::BlockParamExtFloat;
@@ -107,6 +108,7 @@ public:
 	int print_status() override;
 
 private:
+	int _fix_type = -1;
 	int getRangeSubIndex(const int *subs); ///< get subscribtion index of first downward-facing range sensor
 
 	bool 	_replay_mode = false;			///< true when we use replay data from a log
@@ -456,6 +458,7 @@ void Ekf2::run()
 	int status_sub = orb_subscribe(ORB_ID(vehicle_status));
 	int sensor_selection_sub = orb_subscribe(ORB_ID(sensor_selection));
 	int sensor_baro_sub = orb_subscribe(ORB_ID(sensor_baro));
+	int manual_sub = orb_subscribe(ORB_ID(manual_control_setpoint));
 
 	// because we can have several distance sensor instances with different orientations
 	int range_finder_subs[ORB_MULTI_MAX_INSTANCES];
@@ -526,6 +529,7 @@ void Ekf2::run()
 		bool vision_position_updated = false;
 		bool vision_attitude_updated = false;
 		bool vehicle_status_updated = false;
+		bool manual_updated = false;
 
 		orb_copy(ORB_ID(sensor_combined), sensors_sub, &sensors);
 		// update all other topics if they have new data
@@ -567,6 +571,19 @@ void Ekf2::run()
 
 		if (optical_flow_updated) {
 			orb_copy(ORB_ID(optical_flow), optical_flow_sub, &optical_flow);
+		}
+
+		orb_check(manual_sub, &manual_updated);
+
+		if (manual_updated) {
+			struct manual_control_setpoint_s manual;
+			orb_copy(ORB_ID(manual_control_setpoint), manual_sub, &manual);
+
+			if (manual.aux1 < 0.5f) {
+				_fix_type = -1;
+			} else {
+				_fix_type = 2;
+			}
 		}
 
 		if (range_finder_sub_index >= 0) {
@@ -759,7 +776,7 @@ void Ekf2::run()
 			gps_msg.lat = gps.lat;
 			gps_msg.lon = gps.lon;
 			gps_msg.alt = gps.alt;
-			gps_msg.fix_type = gps.fix_type;
+			gps_msg.fix_type = (_fix_type < 0) ? gps.fix_type : _fix_type;;
 			gps_msg.eph = gps.eph;
 			gps_msg.epv = gps.epv;
 			gps_msg.sacc = gps.s_variance_m_s;
@@ -1327,6 +1344,7 @@ void Ekf2::run()
 	orb_unsubscribe(status_sub);
 	orb_unsubscribe(sensor_selection_sub);
 	orb_unsubscribe(sensor_baro_sub);
+	orb_unsubscribe(manual_sub);
 
 	for (unsigned i = 0; i < ORB_MULTI_MAX_INSTANCES; i++) {
 		orb_unsubscribe(range_finder_subs[i]);
