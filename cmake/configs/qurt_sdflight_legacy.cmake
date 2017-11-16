@@ -18,7 +18,7 @@ endif()
 # Disable the creation of the parameters.xml file by scanning individual
 # source files, and scan all source files.  This will create a parameters.xml
 # file that contains all possible parameters, even if the associated module
-# is not used.  This is necessary for parameter synchronization between the 
+# is not used.  This is necessary for parameter synchronization between the
 # ARM and DSP processors.
 set(DISABLE_PARAMS_MODULE_SCOPING TRUE)
 
@@ -35,6 +35,7 @@ set(config_module_list
 	modules/sensors
 	platforms/posix/drivers/df_mpu9250_wrapper
 	platforms/posix/drivers/df_bmp280_wrapper
+	platforms/posix/drivers/df_trone_wrapper
 
 	#
 	# System commands
@@ -71,6 +72,7 @@ set(config_module_list
 	drivers/gps
 	drivers/pwm_out_rc_in
 	drivers/qshell/qurt
+	drivers/spektrum_rc
 
 	#
 	# FC_ADDON drivers
@@ -91,6 +93,7 @@ set(config_module_list
 	lib/terrain_estimation
 	lib/runway_takeoff
 	lib/tailsitter_recovery
+	lib/rc
 	lib/version
 	lib/DriverFramework/framework
 
@@ -110,4 +113,5 @@ set(config_module_list
 set(config_df_driver_list
 	mpu9250
 	bmp280
+	trone
 	)
