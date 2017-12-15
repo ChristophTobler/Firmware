@@ -599,17 +599,16 @@ int DfMpu9250Wrapper::_publish(struct imu_sensor_data &data)
 
 	// ACCEL
 
-	// write raw data (without rotation)
-	accel_report.x_raw = data.accel_m_s2_x;
-	accel_report.y_raw = data.accel_m_s2_y;
-	accel_report.z_raw = data.accel_m_s2_z;
-
 	float xraw_f = data.accel_m_s2_x;
 	float yraw_f = data.accel_m_s2_y;
 	float zraw_f = data.accel_m_s2_z;
 
 	// apply user specified rotation
 	rotate_3f(_rotation, xraw_f, yraw_f, zraw_f);
+
+	accel_report.x_raw = xraw_f * 1000; // (int16) [m / s^s * 1000]
+	accel_report.y_raw = yraw_f * 1000; // (int16) [m / s^s * 1000]
+	accel_report.z_raw = zraw_f * 1000; // (int16) [m / s^s * 1000]
 
 	// adjust values according to the calibration
 	float x_in_new = (xraw_f - _accel_calibration.x_offset) * _accel_calibration.x_scale;
@@ -630,17 +629,16 @@ int DfMpu9250Wrapper::_publish(struct imu_sensor_data &data)
 
 	// GYRO
 
-	// write raw data (withoud rotation)
-	gyro_report.x_raw = data.gyro_rad_s_x;
-	gyro_report.y_raw = data.gyro_rad_s_y;
-	gyro_report.z_raw = data.gyro_rad_s_z;
-
 	xraw_f = data.gyro_rad_s_x;
 	yraw_f = data.gyro_rad_s_y;
 	zraw_f = data.gyro_rad_s_z;
 
 	// apply user specified rotation
 	rotate_3f(_rotation, xraw_f, yraw_f, zraw_f);
+
+	gyro_report.x_raw = xraw_f * 1000; // (int16) [mrad / s]
+	gyro_report.y_raw = yraw_f * 1000; // (int16) [mrad / s]
+	gyro_report.z_raw = zraw_f * 1000; // (int16) [mrad / s]
 
 	// adjust values according to the calibration
 	float x_gyro_in_new = (xraw_f - _gyro_calibration.x_offset) * _gyro_calibration.x_scale;
