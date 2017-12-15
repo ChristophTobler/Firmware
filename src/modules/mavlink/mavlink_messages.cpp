@@ -69,6 +69,8 @@
 #include <uORB/topics/debug_vect.h>
 #include <uORB/topics/differential_pressure.h>
 #include <uORB/topics/distance_sensor.h>
+#include <uORB/topics/sensor_accel.h>
+#include <uORB/topics/sensor_gyro.h>
 #include <uORB/topics/estimator_status.h>
 #include <uORB/topics/fw_pos_ctrl_status.h>
 #include <uORB/topics/home_position.h>
@@ -717,6 +719,93 @@ protected:
 			msg.fields_updated = fields_updated;
 
 			mavlink_msg_highres_imu_send_struct(_mavlink->get_channel(), &msg);
+
+			return true;
+		}
+
+		return false;
+	}
+};
+
+
+class MavlinkStreamRawIMU : public MavlinkStream
+{
+public:
+	const char *get_name() const
+	{
+		return MavlinkStreamRawIMU::get_name_static();
+	}
+
+	static const char *get_name_static()
+	{
+		return "RAW_IMU";
+	}
+
+	static uint16_t get_id_static()
+	{
+		return MAVLINK_MSG_ID_RAW_IMU;
+	}
+
+	uint16_t get_id()
+	{
+		return get_id_static();
+	}
+
+	static MavlinkStream *new_instance(Mavlink *mavlink)
+	{
+		return new MavlinkStreamRawIMU(mavlink);
+	}
+
+	unsigned get_size()
+	{
+		return _raw_accel_sub->is_published() ? (MAVLINK_MSG_ID_RAW_IMU_LEN + MAVLINK_NUM_NON_PAYLOAD_BYTES) : 0;
+	}
+
+private:
+	MavlinkOrbSubscription *_raw_accel_sub;
+	MavlinkOrbSubscription *_raw_gyro_sub;
+	uint64_t _raw_accel_time;
+	uint64_t _raw_gyro_time;
+
+	/* do not allow top copying this class */
+	MavlinkStreamRawIMU(MavlinkStreamRawIMU &);
+	MavlinkStreamRawIMU &operator = (const MavlinkStreamRawIMU &);
+
+protected:
+	explicit MavlinkStreamRawIMU(Mavlink *mavlink) : MavlinkStream(mavlink),
+		_raw_accel_sub(_mavlink->add_orb_subscription(ORB_ID(sensor_accel))),
+		_raw_gyro_sub(_mavlink->add_orb_subscription(ORB_ID(sensor_gyro))),
+		_raw_accel_time(0),
+		_raw_gyro_time(0)
+	{}
+
+	bool send(const hrt_abstime t)
+	{
+		struct sensor_accel_s sensor_accel;
+		struct sensor_gyro_s sensor_gyro;
+
+		if (_raw_accel_sub->update(&_raw_accel_time, &sensor_accel) &&
+		    _raw_gyro_sub->update(&_raw_gyro_time, &sensor_gyro)) {
+
+			if (sensor_accel.timestamp != sensor_gyro.timestamp) {
+				PX4_WARN("accel & gyro not same timestamp");
+				return false;
+			}
+
+			mavlink_raw_imu_t msg = {};
+
+			msg.time_usec = sensor_accel.timestamp;
+			msg.xacc = sensor_accel.x_raw;
+			msg.yacc = sensor_accel.y_raw;
+			msg.zacc = sensor_accel.z_raw;
+			msg.xgyro = sensor_gyro.x_raw;
+			msg.ygyro = sensor_gyro.y_raw;
+			msg.zgyro = sensor_gyro.z_raw;
+			msg.xmag = 0; // TODO also get raw mag?
+			msg.ymag = 0; // TODO also get raw mag?
+			msg.zmag = 0; // TODO also get raw mag?
+
+			mavlink_msg_raw_imu_send_struct(_mavlink->get_channel(), &msg);
 
 			return true;
 		}
@@ -4286,6 +4375,7 @@ const StreamListItem *streams_list[] = {
 	new StreamListItem(&MavlinkStreamCommandLong::new_instance, &MavlinkStreamCommandLong::get_name_static, &MavlinkStreamCommandLong::get_id_static),
 	new StreamListItem(&MavlinkStreamSysStatus::new_instance, &MavlinkStreamSysStatus::get_name_static, &MavlinkStreamSysStatus::get_id_static),
 	new StreamListItem(&MavlinkStreamHighresIMU::new_instance, &MavlinkStreamHighresIMU::get_name_static, &MavlinkStreamHighresIMU::get_id_static),
+	new StreamListItem(&MavlinkStreamRawIMU::new_instance, &MavlinkStreamRawIMU::get_name_static, &MavlinkStreamRawIMU::get_id_static),
 	new StreamListItem(&MavlinkStreamAttitude::new_instance, &MavlinkStreamAttitude::get_name_static, &MavlinkStreamAttitude::get_id_static),
 	new StreamListItem(&MavlinkStreamAttitudeQuaternion::new_instance, &MavlinkStreamAttitudeQuaternion::get_name_static, &MavlinkStreamAttitudeQuaternion::get_id_static),
 	new StreamListItem(&MavlinkStreamVFRHUD::new_instance, &MavlinkStreamVFRHUD::get_name_static, &MavlinkStreamVFRHUD::get_id_static),
