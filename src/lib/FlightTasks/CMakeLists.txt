@@ -44,8 +44,10 @@ tasks/FlightTask.cpp
 		tasks/FlightTaskAutoLine.cpp
 		tasks/FlightTaskAutoFollowMe.cpp
 		tasks/FlightTaskOffboard.cpp
+		tasks/FlightTaskJourney.cpp
 		tasks/Utility/ManualSmoothingZ.cpp
 		tasks/Utility/ManualSmoothingXY.cpp
+		tasks/Utility/StraightLine.cpp
 		SubscriptionArray.cpp
 		FlightTasks.cpp
 )

@@ -731,7 +731,8 @@ MulticopterPositionControl::start_flight_task()
 			break;
 
 		case 1:
-			error =  _flight_tasks.switchTask(FlightTaskIndex::PositionSmooth);
+			error =  _flight_tasks.switchTask(FlightTaskIndex::Journey);
+			// error =  _flight_tasks.switchTask(FlightTaskIndex::PositionSmooth);
 			break;
 
 		case 2:
