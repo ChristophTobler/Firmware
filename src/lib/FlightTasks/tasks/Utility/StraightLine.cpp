@@ -80,8 +80,11 @@ void StraightLine::generateSetpoints(matrix::Vector3f &position_setpoint, matrix
 
 	float dist_to_target = (_target - _pos).length(); // distance to target
 
+	// printf("_desired_speed = %f _desired_speed_at_target = %f\n", (double)_desired_speed, (double)_desired_speed_at_target);
+	// printf("braking_distance = %f dist_to_target = %f\n", (double)braking_distance, (double)dist_to_target);
 	// Either accelerate or decelerate
 	float speed_sp    = dist_to_target > braking_distance ? _desired_speed        :  _desired_speed_at_target;
+	// printf("speed_sp1 = %f\n", (double)speed_sp);
 	float max_acc_dec = dist_to_target > braking_distance ? _desired_acceleration : -_desired_deceleration;
 
 	float acc_track = (speed_sp - speed_sp_prev) / _deltatime;
@@ -90,10 +93,13 @@ void StraightLine::generateSetpoints(matrix::Vector3f &position_setpoint, matrix
 		// accelerate/decelerate with desired acceleration/deceleration towards target
 		speed_sp = speed_sp_prev + max_acc_dec * _deltatime;
 	}
+	// printf("speed_sp2 = %f\n", (double)speed_sp);
 
 	// constrain the velocity
 	speed_sp = math::constrain(speed_sp, 0.0f, _desired_speed);
-
+	// printf("_pos = %f %f %f  _target = %f %f %f\n", (double)_pos(0), (double)_pos(1), (double)_pos(2), (double)_target(0), (double)_target(1), (double)_target(2));
+	// printf("speed_sp3 = %f\n", (double)speed_sp);
+	// printf("position_setpoint = %f %f %f  velocity_setpoint = %f %f %f\n", (double)position_setpoint(0), (double)position_setpoint(1), (double)position_setpoint(2), (double)velocity_setpoint(0), (double)velocity_setpoint(1), (double)velocity_setpoint(2));
 	// set the position and velocity setpoints
 	position_setpoint = closest_pt_on_line;
 	velocity_setpoint = u_orig_to_target * speed_sp;
@@ -106,11 +112,13 @@ float StraightLine::getMaxAcc()
 	Vector3f u_orig_to_target = (_target - _origin).unit_or_zero();
 
 	// calculate the maximal horizontal acceleration
-	float divider = (sqrt(powf(u_orig_to_target(0), 2) * sqrt(powf(u_orig_to_target(1), 2))));
+	float divider = (sqrt(powf(u_orig_to_target(0), 2) + powf(u_orig_to_target(1), 2)));
 	float max_acc_hor = MPC_ACC_HOR_MAX.get();
 
 	if (divider > FLT_EPSILON) {
 		max_acc_hor /= divider;
+	} else {
+		max_acc_hor *= 1000.0f;
 	}
 
 	// calculate the maximal vertical acceleration
@@ -119,6 +127,8 @@ float StraightLine::getMaxAcc()
 
 	if (fabs(u_orig_to_target(2)) > FLT_EPSILON) {
 		max_acc_vert /= fabs(u_orig_to_target(2));
+	} else {
+		max_acc_vert *= 1000.0f;
 	}
 
 	return math::min(max_acc_hor, max_acc_vert);
@@ -130,11 +140,13 @@ float StraightLine::getMaxVel()
 	Vector3f u_orig_to_target = (_target - _origin).unit_or_zero();
 
 	// calculate the maximal horizontal velocity
-	float divider = (sqrt(powf(u_orig_to_target(0), 2) * sqrt(powf(u_orig_to_target(1), 2))));
+	float divider = (sqrt(powf(u_orig_to_target(0), 2) + powf(u_orig_to_target(1), 2)));
 	float max_vel_hor = MPC_XY_VEL_MAX.get();
 
 	if (divider > FLT_EPSILON) {
 		max_vel_hor /= divider;
+	} else {
+		max_vel_hor *= 1000.0f;
 	}
 
 	// calculate the maximal vertical velocity
@@ -143,6 +155,8 @@ float StraightLine::getMaxVel()
 
 	if (fabs(u_orig_to_target(2)) > FLT_EPSILON) {
 		max_vel_vert /= fabs(u_orig_to_target(2));
+	} else {
+		max_vel_vert *= 1000.0f;
 	}
 
 	return math::min(max_vel_hor, max_vel_vert);
