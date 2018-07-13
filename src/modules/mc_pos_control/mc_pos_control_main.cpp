@@ -732,6 +732,7 @@ MulticopterPositionControl::start_flight_task()
 
 		case 1:
 			error =  _flight_tasks.switchTask(FlightTaskIndex::PositionSmooth);
+			// error =  _flight_tasks.switchTask(FlightTaskIndex::Journey);
 			break;
 
 		case 2:
@@ -754,7 +755,8 @@ MulticopterPositionControl::start_flight_task()
 
 	// manual altitude control
 	if (_vehicle_status.nav_state == vehicle_status_s::NAVIGATION_STATE_ALTCTL || task_failure) {
-		int error = _flight_tasks.switchTask(FlightTaskIndex::Altitude);
+		// int error = _flight_tasks.switchTask(FlightTaskIndex::Altitude);
+		int error =  _flight_tasks.switchTask(FlightTaskIndex::Journey);
 
 		if (error != 0) {
 			PX4_WARN("Altitude-Ctrl activation failed with error: %s", _flight_tasks.errorToString(error));
